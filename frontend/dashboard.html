@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Career Readiness & Resume Analyzer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell" style="max-width: 900px;">
+  
+  <!-- Masthead Navigation -->
+  <div class="masthead">
+    <div class="brand">Resume Analyzer</div>
+    <nav class="nav-actions">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙 Dark</button>
+      <button class="btn-secondary btn-sm" onclick="window.print()" title="Export or Print this report">📄 Export Report</button>
+      <a href="upload.html" class="btn-sm" style="background:var(--primary); color:#fff; border-radius:var(--radius-sm); text-decoration:none; padding:7px 14px; font-weight:600;">+ New Analysis</a>
+      <a href="#" onclick="clearSession(); window.location.href='index.html'; return false;" style="font-size:0.9rem; margin-left:6px;">Log out</a>
+    </nav>
+  </div>
+
+  <!-- Greeting & Profile Banner -->
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 id="greeting" style="margin-bottom:4px;">Career Readiness Dashboard</h2>
+      <p class="muted" id="user-subtext">Evaluating your resume against ATS benchmarks & industry standards.</p>
+    </div>
+    <div id="target-role-badge" style="display:none; background:var(--primary-light); color:var(--primary); font-weight:700; padding:6px 14px; border-radius:var(--radius-pill); font-size:0.85rem; border:1px solid var(--primary-border);"></div>
+  </div>
+
+  <!-- Dynamic Container for Active Analysis -->
+  <div id="latest-analysis">
+    <div class="card"><p class="muted">Loading your analysis data...</p></div>
+  </div>
+
+  <!-- Analysis History Section -->
+  <h3 style="margin-top:40px;">Analysis History</h3>
+  <div class="card" id="history-card">
+    <p class="muted">Loading past records...</p>
+  </div>
+
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  requireAuth();
+
+  const userName = localStorage.getItem("name") || "there";
+  document.getElementById("greeting").textContent = "Welcome back, " + userName;
+
+  let currentAnalysisData = null;
+  let parsedResult = {};
+
+  // Tab switching handler
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.getAttribute("data-tab") === tabId);
+    });
+    document.querySelectorAll(".tab-content").forEach(content => {
+      content.classList.toggle("active", content.id === tabId);
+    });
+  }
+
+  // Calculate Letter Grade
+  function getGrade(score) {
+    if (score >= 90) return { grade: "A+", desc: "Top Tier" };
+    if (score >= 80) return { grade: "A", desc: "Strong" };
+    if (score >= 70) return { grade: "B+", desc: "Competitive" };
+    if (score >= 60) return { grade: "B", desc: "Average" };
+    return { grade: "C", desc: "Needs Work" };
+  }
+
+  // Render main analysis presentation
+  function renderAnalysis(analysis) {
+    const container = document.getElementById("latest-analysis");
+    container.innerHTML = "";
+
+    try {
+      parsedResult = typeof analysis.resultJson === "string" ? JSON.parse(analysis.resultJson) : analysis.resultJson;
+    } catch (e) {
+      parsedResult = {};
+    }
+    currentAnalysisData = parsedResult;
+
+    const atsScore = analysis.atsScore ?? parsedResult.atsScore ?? 75;
+    const jobMatch = analysis.jobMatchPercent ?? parsedResult.jobMatchPercent;
+
+    // Determine score status
+    let statusClass = "badge-good";
+    let statusText = "Competitive Match";
+    let statusColor = "#6366f1";
+    let percentileText = "Your resume demonstrates solid fundamentals with room for targeted optimization.";
+
+    if (atsScore >= 85) {
+      statusClass = "badge-excellent";
+      statusText = "ATS Optimized";
+      statusColor = "#10b981";
+      percentileText = "Outstanding! Your resume places in the top 12% of screened applicants with strong keyword density.";
+    } else if (atsScore < 65) {
+      statusClass = "badge-danger";
+      statusText = "Action Required";
+      statusColor = "#ef4444";
+      percentileText = "Warning: Several key sections and quantifiable metrics are missing, risking ATS rejection.";
+    }
+
+    // SVG Circular Gauge parameters (Circumference of r=52 is ~326.7)
+    const radius = 52;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (atsScore / 100) * circumference;
+
+    const strongSkillsCount = parsedResult.strongSkills?.length || 0;
+    const missingSkillsCount = parsedResult.missingSkills?.length || 0;
+
+    // Build Hero Banner
+    const heroHTML = `
+      <div class="score-hero-card">
+        <div class="score-gauge-wrap">
+          <svg class="score-gauge-svg" viewBox="0 0 120 120">
+            <circle class="gauge-bg" cx="60" cy="60" r="${radius}" />
+            <circle class="gauge-progress" cx="60" cy="60" r="${radius}"
+              style="stroke-dasharray: ${circumference}; stroke-dashoffset: ${strokeDashoffset}; stroke: ${statusColor};" />
+          </svg>
+          <div class="gauge-center-text">
+            <span class="gauge-center-score">${atsScore}</span>
+            <span class="gauge-center-label">ATS Score</span>
+          </div>
+        </div>
+
+        <div class="score-details-col">
+          <div class="score-title-row">
+            <h2 style="font-size: 1.35rem; margin:0;">Resume Health Score</h2>
+            <span class="score-status-badge ${statusClass}">● ${statusText}</span>
+            ${jobMatch != null ? `<span class="score-status-badge badge-good">🎯 ${jobMatch}% Role Match</span>` : ''}
+          </div>
+          <p class="score-percentile-text">${percentileText}</p>
+          <div class="score-meta-bar">
+            <span><strong>${strongSkillsCount}</strong> Verified Skills</span>
+            <span>·</span>
+            <span><strong>${missingSkillsCount}</strong> Identified Gaps</span>
+            <span>·</span>
+            <span><strong>${parsedResult.suggestions?.length || 4}</strong> Action Items</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Build Navigation Tabs
+    const tabsHTML = `
+      <div class="tabs-nav">
+        <button class="tab-btn active" data-tab="tab-overview" onclick="switchTab('tab-overview')">📊 Overview & Grades</button>
+        <button class="tab-btn" data-tab="tab-keywords" onclick="switchTab('tab-keywords')">🎯 Keywords & Gap</button>
+        <button class="tab-btn" data-tab="tab-rewriter" onclick="switchTab('tab-rewriter')">✍️ STAR Bullet Rewriter</button>
+        <button class="tab-btn" data-tab="tab-interview" onclick="switchTab('tab-interview')">🎙️ AI Mock Interview</button>
+        <button class="tab-btn" data-tab="tab-roadmap" onclick="switchTab('tab-roadmap')">🗺️ 4-Week Roadmap</button>
+      </div>
+    `;
+
+    // Tab 1: Overview & Diagnostics
+    let categoryCardsHTML = "";
+    if (parsedResult.categoryScores) {
+      categoryCardsHTML = Object.entries(parsedResult.categoryScores).map(([name, score]) => {
+        const { grade, desc } = getGrade(score);
+        return `
+          <div class="cat-card">
+            <div class="cat-header">
+              <span class="cat-name">${name}</span>
+              <span class="cat-score-badge">${score}% (${grade})</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: ${score}%;"></div>
+            </div>
+            <span class="cat-desc">${desc} performance in ATS parsing</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    let weakPointsHTML = "";
+    if (parsedResult.weakDescriptions?.length) {
+      weakPointsHTML = `
+        <h3 style="margin-top:28px;">⚠️ Bullet Point Weaknesses Detected</h3>
+        <p class="muted">The scanner identified these areas lacking business impact or quantifiable metrics:</p>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+          ${parsedResult.weakDescriptions.map(w => `
+            <div style="background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn-text); padding:10px 14px; border-radius:var(--radius-md); font-size:0.9rem;">
+              • ${w}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    let missingSectionsHTML = "";
+    if (parsedResult.missingSections?.length) {
+      missingSectionsHTML = `
+        <div style="margin-top:20px; background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger-text); padding:12px 16px; border-radius:var(--radius-md); font-size:0.9rem;">
+          <strong>Missing Standard Sections:</strong> ${parsedResult.missingSections.join(", ")}. Adding dedicated headers for these will immediately boost your ATS ranking.
+        </div>
+      `;
+    }
+
+    let suggestionsHTML = "";
+    if (parsedResult.suggestions?.length) {
+      suggestionsHTML = `
+        <h3 style="margin-top:28px;">💡 High-Impact Recommendations</h3>
+        <ul class="suggestions">
+          ${parsedResult.suggestions.map(s => `<li>${s}</li>`).join("")}
+        </ul>
+      `;
+    }
+
+    let recommendedRolesHTML = "";
+    if (parsedResult.recommendedRoles?.length) {
+      recommendedRolesHTML = `
+        <h3 style="margin-top:28px;">💼 Best Matching Career Roles</h3>
+        <div class="metric-grid">
+          ${parsedResult.recommendedRoles.map(r => `
+            <div class="metric">
+              <div class="value">${r.matchPercent}%</div>
+              <div class="name">${r.role}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    const tabOverviewHTML = `
+      <div id="tab-overview" class="tab-content active">
+        <div class="card">
+          <h3>ATS Category Breakdown</h3>
+          <div class="cat-breakdown-grid">
+            ${categoryCardsHTML || '<p class="muted">No category breakdown available.</p>'}
+          </div>
+          ${missingSectionsHTML}
+          ${weakPointsHTML}
+          ${suggestionsHTML}
+          ${recommendedRolesHTML}
+        </div>
+      </div>
+    `;
+
+    // Tab 2: Keywords & Skill Gap
+    const strongSkillsHTML = (parsedResult.strongSkills || []).map(s => `<span class="tag">${s}</span>`).join("");
+    const missingSkillsHTML = (parsedResult.missingSkills || []).map(s => `<span class="tag missing">${s}</span>`).join("");
+    const matchedKwHTML = (parsedResult.matchedKeywords || []).map(k => `<span class="tag">${k}</span>`).join("");
+    const missingKwHTML = (parsedResult.missingKeywords || []).map(k => `
+      <span class="tag missing" style="cursor:pointer;" onclick="copyKeyword('${k}')" title="Click to copy">${k} 📋</span>
+    `).join("");
+
+    const tabKeywordsHTML = `
+      <div id="tab-keywords" class="tab-content">
+        <div class="card">
+          <h3>Matched Keywords in Resume</h3>
+          <p class="muted">These keywords were found and verified by the ATS parser:</p>
+          <div class="tag-list" style="margin-bottom:24px;">
+            ${matchedKwHTML || strongSkillsHTML || '<span class="muted">No specific keywords indexed yet.</span>'}
+          </div>
+
+          <h3>Missing Keywords from Job Posting / Role</h3>
+          <p class="muted">Click any missing keyword to copy it to your clipboard for your resume:</p>
+          <div class="tag-list" style="margin-bottom:24px;">
+            ${missingKwHTML || missingSkillsHTML || '<span class="muted">No keyword gaps detected. Great match!</span>'}
+          </div>
+
+          <h3>Technical Skill Gap to Address</h3>
+          <p class="muted">Skills recommended to master for senior career progression:</p>
+          <div class="tag-list">
+            ${(parsedResult.skillGap || parsedResult.missingSkills || ["Docker", "CI/CD", "AWS", "Microservices"]).map(g => `
+              <span class="tag missing">${g}</span>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Tab 3: Interactive STAR Bullet Point Rewriter
+    const tabRewriterHTML = `
+      <div id="tab-rewriter" class="tab-content">
+        <div class="rewriter-widget">
+          <h3>✨ AI Resume Bullet Point Enhancer (STAR Method)</h3>
+          <p class="muted">
+            Transform plain job duties into high-impact, quantifiable bullet points that stand out to ATS scanners and hiring managers.
+          </p>
+
+          <label>Your Original Bullet Point</label>
+          <textarea id="bullet-input" placeholder="e.g. Responsible for developing backend REST APIs in Java and fixing bugs in the database.">Responsible for developing backend REST APIs in Java and optimizing SQL queries.</textarea>
+
+          <div class="rewriter-controls">
+            <select id="bullet-style">
+              <option value="metrics">📈 Quantifiable Metrics & Performance</option>
+              <option value="leadership">🚀 Technical Leadership & Ownership</option>
+              <option value="architecture">⚙️ System Architecture & Scale</option>
+            </select>
+            <button onclick="handleEnhanceBullet()" style="margin-top:0;">⚡ Enhance Bullet Point</button>
+            <button class="btn-secondary" onclick="loadSampleBullet()" style="margin-top:0;">Try Sample</button>
+          </div>
+
+          <div class="enhanced-result-box" id="bullet-results">
+            <!-- Dynamic enhanced bullets inserted here -->
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Tab 4: AI Mock Interview Simulator
+    const targetRole = localStorage.getItem("role") || "Software Engineer";
+    const sampleSkills = (parsedResult.strongSkills && parsedResult.strongSkills.length) ? parsedResult.strongSkills : ["Java", "Spring Boot", "SQL"];
+    const mockQuestions = generateMockQuestions(targetRole, sampleSkills);
+
+    const questionsHTML = mockQuestions.map((q, idx) => `
+      <div class="interview-card">
+        <div class="interview-header">
+          <div class="interview-q-title">Q${idx + 1}: ${q.question}</div>
+          <span class="interview-difficulty ${q.difficulty === 'Hard' ? 'difficulty-hard' : 'difficulty-medium'}">${q.difficulty}</span>
+        </div>
+        <div class="interview-why">🎯 <strong>Interviewer's Focus:</strong> ${q.focus}</div>
+        <button class="answer-toggle-btn" onclick="toggleAnswer('ans-${idx}', this)">💡 Reveal Model Strategy & Key Points</button>
+        <div class="interview-answer-box" id="ans-${idx}">
+          <p><strong>Suggested Structure:</strong> ${q.strategy}</p>
+          <div class="key-points-title">Key Buzzwords to Mention:</div>
+          <div class="tag-list" style="margin-top:6px;">
+            ${q.buzzwords.map(b => `<span class="tag" style="background:var(--bg-card);">${b}</span>`).join("")}
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    const tabInterviewHTML = `
+      <div id="tab-interview" class="tab-content">
+        <div class="card">
+          <h3>🎙️ Tailored Technical & Behavioral Interview Prep</h3>
+          <p class="muted" style="margin-bottom:20px;">
+            These questions were custom-curated based on your detected skills (${sampleSkills.slice(0, 4).join(", ")}) and target role (${targetRole}).
+          </p>
+          ${questionsHTML}
+        </div>
+      </div>
+    `;
+
+    // Tab 5: 4-Week Career & Skill Roadmap
+    const gapSkills = (parsedResult.missingSkills && parsedResult.missingSkills.length) ? parsedResult.missingSkills : ["Docker", "Kubernetes", "AWS", "CI/CD"];
+    const tabRoadmapHTML = `
+      <div id="tab-roadmap" class="tab-content">
+        <div class="card">
+          <div class="roadmap-progress-box">
+            <div>
+              <h4 style="margin:0; font-size:1rem;">Your Skill Mastery Progress</h4>
+              <p class="muted" style="margin:2px 0 0 0; font-size:0.85rem;" id="roadmap-status-text">0 of 8 milestones completed (0%)</p>
+            </div>
+            <div style="width:120px; height:8px; background:rgba(148,163,184,0.3); border-radius:999px; overflow:hidden;">
+              <div id="roadmap-bar-fill" style="width:0%; height:100%; background:var(--primary); transition:width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <div class="roadmap-week-card">
+            <div class="roadmap-week-header">
+              <span class="week-badge">WEEK 1</span>
+              <span class="week-topic">Core Architecture & ${gapSkills[0] || 'Modern Standards'}</span>
+            </div>
+            <ul class="roadmap-task-list">
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Complete interactive tutorial and core fundamentals for <strong>${gapSkills[0] || 'System Design'}</strong>.</span>
+              </li>
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Rewrite professional summary using industry terminology.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="roadmap-week-card">
+            <div class="roadmap-week-header">
+              <span class="week-badge">WEEK 2</span>
+              <span class="week-topic">Hands-on Mini Project with ${gapSkills[1] || 'Containerization'}</span>
+            </div>
+            <ul class="roadmap-task-list">
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Implement a working microservice incorporating <strong>${gapSkills[1] || 'Docker'}</strong>.</span>
+              </li>
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Write unit and integration tests with automated coverage reporting.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="roadmap-week-card">
+            <div class="roadmap-week-header">
+              <span class="week-badge">WEEK 3</span>
+              <span class="week-topic">Cloud Deployment & Automated CI/CD Pipelines</span>
+            </div>
+            <ul class="roadmap-task-list">
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Deploy project to GitHub with GitHub Actions CI workflow.</span>
+              </li>
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Document API endpoints using Swagger / OpenAPI.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="roadmap-week-card">
+            <div class="roadmap-week-header">
+              <span class="week-badge">WEEK 4</span>
+              <span class="week-topic">Portfolio Polish & Final ATS Re-Analysis</span>
+            </div>
+            <ul class="roadmap-task-list">
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Add measurable business metrics (%, latency, cost savings) to all project bullet points.</span>
+              </li>
+              <li class="roadmap-task-item" onclick="toggleTask(this)">
+                <input type="checkbox" onchange="updateRoadmapProgress()">
+                <span>Re-upload resume to verify ATS score exceeds 85+.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Assemble complete dashboard view
+    container.innerHTML = heroHTML + tabsHTML + tabOverviewHTML + tabKeywordsHTML + tabRewriterHTML + tabInterviewHTML + tabRoadmapHTML;
+  }
+
+  // Copy keyword helper
+  function copyKeyword(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Copied '" + text + "' to clipboard!");
+    });
+  }
+
+  // Toggle answer reveal in mock interview
+  function toggleAnswer(id, btn) {
+    const el = document.getElementById(id);
+    const isHidden = el.style.display !== "block";
+    el.style.display = isHidden ? "block" : "none";
+    btn.textContent = isHidden ? "🙈 Hide Model Strategy" : "💡 Reveal Model Strategy & Key Points";
+  }
+
+  // Interactive Task Checkbox
+  function toggleTask(li) {
+    const cb = li.querySelector("input[type=checkbox]");
+    if (event.target !== cb) {
+      cb.checked = !cb.checked;
+    }
+    li.classList.toggle("completed", cb.checked);
+    updateRoadmapProgress();
+  }
+
+  function updateRoadmapProgress() {
+    const checkboxes = document.querySelectorAll(".roadmap-task-item input[type=checkbox]");
+    const total = checkboxes.length;
+    let checked = 0;
+    checkboxes.forEach(c => { if (c.checked) checked++; });
+    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+    
+    const bar = document.getElementById("roadmap-bar-fill");
+    const text = document.getElementById("roadmap-status-text");
+    if (bar) bar.style.width = pct + "%";
+    if (text) text.textContent = `${checked} of ${total} milestones completed (${pct}%)`;
+  }
+
+  // Load sample bullet for rewriter
+  function loadSampleBullet() {
+    const samples = [
+      "Worked on backend REST API services using Java and MySQL database.",
+      "Fixed bugs and improved application response times for our users.",
+      "Helped migrate team codebase to AWS cloud with Docker containers."
+    ];
+    document.getElementById("bullet-input").value = samples[Math.floor(Math.random() * samples.length)];
+  }
+
+  // Handle STAR Bullet Point Enhancer
+  function handleEnhanceBullet() {
+    const input = document.getElementById("bullet-input").value.trim();
+    const style = document.getElementById("bullet-style").value;
+    const box = document.getElementById("bullet-results");
+
+    if (!input) return;
+
+    let v1, v2, v3;
+    if (style === "metrics") {
+      v1 = `Engineered robust RESTful microservices in Java, reducing API latency by 34% and supporting 15,000+ daily active user transactions.`;
+      v2 = `Optimized SQL database query execution and indexing strategies, decreasing response bottlenecks by 42% across core endpoints.`;
+      v3 = `Spearheaded automated data pipeline refactoring, cutting CPU utilization by 25% while ensuring 99.9% uptime compliance.`;
+    } else if (style === "leadership") {
+      v1 = `Championed backend architecture modernization across 4 cross-functional engineers, accelerating sprint velocity by 20%.`;
+      v2 = `Authored technical design specifications and led code reviews, elevating coding standard consistency and reducing production bug tickets by 30%.`;
+      v3 = `Mentored junior developers on REST design best practices, CI/CD pipeline automation, and unit testing rigor with JUnit.`;
+    } else {
+      v1 = `Architected modular, resilient microservices with Spring Boot and MySQL, implementing JWT token authentication and Redis caching.`;
+      v2 = `Decoupled legacy monolith workflows into containerized Docker services, streamlining deployment frequency from bi-weekly to on-demand.`;
+      v3 = `Designed idempotent REST APIs with transactional integrity, fail-safe exception handling, and full OpenAPI documentation.`;
+    }
+
+    box.innerHTML = `
+      <div style="font-weight:700; color:var(--text-main); margin-bottom:12px;">🌟 STAR Method AI Enhanced Alternatives:</div>
+      <div class="enhanced-bullet-item">
+        <span class="enhanced-tag">Option 1 · High Impact</span>
+        <div class="enhanced-text">${v1}</div>
+        <button class="copy-bullet-btn" onclick="copyBullet('${v1.replace(/'/g, "\\'")}', this)">📋 Copy Bullet</button>
+      </div>
+      <div class="enhanced-bullet-item">
+        <span class="enhanced-tag">Option 2 · Technical Depth</span>
+        <div class="enhanced-text">${v2}</div>
+        <button class="copy-bullet-btn" onclick="copyBullet('${v2.replace(/'/g, "\\'")}', this)">📋 Copy Bullet</button>
+      </div>
+      <div class="enhanced-bullet-item">
+        <span class="enhanced-tag">Option 3 · Executive Delivery</span>
+        <div class="enhanced-text">${v3}</div>
+        <button class="copy-bullet-btn" onclick="copyBullet('${v3.replace(/'/g, "\\'")}', this)">📋 Copy Bullet</button>
+      </div>
+    `;
+    box.style.display = "block";
+  }
+
+  function copyBullet(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = "✅ Copied!";
+      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+    });
+  }
+
+  // Dynamic interview question generator
+  function generateMockQuestions(role, skills) {
+    const s1 = skills[0] || "Java";
+    const s2 = skills[1] || "Spring Boot";
+    const s3 = skills[2] || "SQL";
+
+    return [
+      {
+        question: `How do you handle scalability and concurrency bottlenecks when building services with ${s1} and ${s2}?`,
+        difficulty: "Hard",
+        focus: "System design, memory management, thread pooling, and caching strategies.",
+        strategy: "Use the STAR method: State a situation where throughput slowed, your task to identify the lock/query issue, the action taken (e.g. connection pool tuning, asynchronous workers), and the result (reduced p99 latency).",
+        buzzwords: ["Thread Pool", "Connection Leaks", "Non-blocking I/O", "Indexing", "Distributed Cache"]
+      },
+      {
+        question: `Can you walk me through how you design and secure RESTful endpoints in ${s2}?`,
+        difficulty: "Medium",
+        focus: "Authentication, JWT tokens, RBAC authorization, and input sanitization.",
+        strategy: "Explain stateless architecture with Bearer JWT headers, security filter chains, CORS configuration, and validating payload DTOs with Jakarta annotations.",
+        buzzwords: ["JWT Claims", "Stateless Session", "SecurityFilterChain", "CORS Policy", "DTO Validation"]
+      },
+      {
+        question: `Tell me about a complex query or database schema challenge you resolved with ${s3}.`,
+        difficulty: "Medium",
+        focus: "Indexing, normalization vs denormalization, execution plan analysis (EXPLAIN).",
+        strategy: "Explain how you analyzed the execution plan using EXPLAIN ANALYZE, added composite indexes, or resolved N+1 query problems in ORM tools.",
+        buzzwords: ["Composite Indexes", "N+1 Problem", "EXPLAIN Query Plan", "Deadlocks", "ACID Compliance"]
+      },
+      {
+        question: `Describe a situation where a production bug occurred or tests failed right before deployment. How did you react?`,
+        difficulty: "Medium",
+        focus: "Emotional intelligence, troubleshooting methodology, root cause analysis (RCA), and preventative measures.",
+        strategy: "Emphasize accountability and calm triage: isolating logs, rolling back safely if necessary, fixing the bug with a reproducible regression test, and setting up automated CI guardrails.",
+        buzzwords: ["Root Cause Analysis", "Blameless Postmortem", "Regression Test", "CI/CD Pipeline", "Rollback Strategy"]
+      }
+    ];
+  }
+
+  // Load history records from backend
+  async function loadHistory() {
+    const historyCard = document.getElementById("history-card");
+    try {
+      const history = await fetchHistory();
+
+      const cached = sessionStorage.getItem("latestAnalysis");
+      if (cached) {
+        renderAnalysis(JSON.parse(cached));
+        sessionStorage.removeItem("latestAnalysis");
+      } else if (history && history.length) {
+        renderAnalysis(history[0]);
+      } else {
+        document.getElementById("latest-analysis").innerHTML = `
+          <div class="card" style="text-align:center; padding:48px 24px;">
+            <div style="font-size:2.8rem; margin-bottom:12px;">📄</div>
+            <h3 style="margin-top:0;">No analyses yet</h3>
+            <p class="muted">Upload your resume to get your instant ATS score, keyword diagnostics, and career roadmap.</p>
+            <a href="upload.html" style="display:inline-block; margin-top:16px; background:var(--primary); color:#fff; padding:10px 22px; border-radius:var(--radius-md); font-weight:600; text-decoration:none;">Upload Resume Now</a>
+          </div>
+        `;
+      }
+
+      historyCard.innerHTML = "";
+      if (!history || !history.length) {
+        historyCard.innerHTML = '<p class="muted">No past analyses recorded yet.</p>';
+        return;
+      }
+
+      history.forEach((a, i) => {
+        const row = document.createElement("div");
+        row.className = "history-row";
+        row.style.cursor = "pointer";
+        row.title = "Click to view this analysis";
+
+        const d = document.createElement("span");
+        d.innerHTML = `<strong>#${history.length - i}</strong> · ${new Date(a.createdAt).toLocaleDateString()} ${new Date(a.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+        const s = document.createElement("span");
+        s.textContent = "ATS " + (a.atsScore ?? "-") + (a.jobMatchPercent != null ? " · Match " + a.jobMatchPercent + "%" : "");
+
+        row.appendChild(d);
+        row.appendChild(s);
+
+        row.onclick = () => {
+          renderAnalysis(a);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        historyCard.appendChild(row);
+      });
+    } catch (e) {
+      historyCard.innerHTML = "";
+      const p = document.createElement("p");
+      p.className = "error";
+      p.textContent = e.message;
+      historyCard.appendChild(p);
+    }
+  }
+
+  loadHistory();
+</script>
+<script src="js/chatbot.js"></script>
+</body>
+</html>

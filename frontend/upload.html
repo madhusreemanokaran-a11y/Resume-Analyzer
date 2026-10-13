@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analyze Resume - AI Resume Analyzer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell" style="max-width: 760px;">
+  
+  <!-- Masthead Navigation -->
+  <div class="masthead">
+    <div class="brand">Resume Analyzer</div>
+    <nav class="nav-actions">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙 Dark</button>
+      <a href="dashboard.html" class="btn-secondary btn-sm" style="text-decoration:none;">📊 Dashboard</a>
+      <a href="#" onclick="clearSession(); window.location.href='index.html'; return false;" style="font-size:0.9rem; margin-left:6px;">Log out</a>
+    </nav>
+  </div>
+
+  <h2>Upload & Benchmark Your Resume</h2>
+  <p class="muted">
+    Upload your resume (PDF or DOCX). You can optionally paste a target job description to get keyword matching and ATS compatibility scores.
+  </p>
+
+  <div class="card" style="margin-top:20px;">
+    
+    <!-- Drag and Drop Zone -->
+    <label>Resume File (PDF or DOCX)</label>
+    <div class="dropzone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dropzone-icon">📁</div>
+      <div class="dropzone-text" id="drop-text">Drag & drop your resume file here, or <span style="color:var(--primary); text-decoration:underline;">browse</span></div>
+      <p class="muted" style="margin:4px 0 0 0; font-size:0.82rem;">Supports PDF & DOCX formats (max 10MB)</p>
+    </div>
+    <input type="file" id="file-input" accept=".pdf,.docx" style="display:none;" onchange="handleFileSelected(this.files[0])">
+
+    <!-- Selected File Indicator -->
+    <div id="file-preview-wrap" style="display:none; margin-top:12px; align-items:center; justify-content:space-between; background:var(--bg-subtle); padding:10px 16px; border-radius:var(--radius-md); border:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.4rem;">📄</span>
+        <div>
+          <div id="file-name" style="font-weight:700; font-size:0.92rem; color:var(--text-main);">resume.pdf</div>
+          <div id="file-size" class="muted" style="font-size:0.8rem;">142 KB</div>
+        </div>
+      </div>
+      <button class="btn-outline btn-sm" onclick="clearSelectedFile()" style="margin-top:0;">Remove</button>
+    </div>
+
+    <!-- Quick Sample Loader Button -->
+    <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <span class="muted" style="font-size:0.85rem;">Don't have a file handy?</span>
+      <button type="button" class="sample-resume-btn" onclick="loadSampleResume()">
+        ⚡ Load Sample Software Engineer Resume
+      </button>
+    </div>
+
+    <!-- Job Description Input -->
+    <div style="margin-top:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <label style="margin:0;">Job Description (Optional)</label>
+        <div style="font-size:0.8rem; display:flex; gap:6px; align-items:center;">
+          <span class="muted">Quick fill:</span>
+          <a href="#" onclick="fillSampleJD('java'); return false;" style="font-size:0.8rem;">Java Dev</a>
+          <span>·</span>
+          <a href="#" onclick="fillSampleJD('fullstack'); return false;" style="font-size:0.8rem;">Full Stack</a>
+        </div>
+      </div>
+      <textarea id="job-description" style="margin-top:8px;" placeholder="Paste the job requirements and qualifications here to see keyword match percentage and gap analysis..."></textarea>
+    </div>
+
+    <!-- Submit Button -->
+    <button id="analyze-btn" onclick="handleAnalyze()" style="width:100%; margin-top:20px; font-size:1.05rem; padding:14px;">
+      🚀 Run AI ATS Analysis
+    </button>
+    
+    <div class="error" id="analyze-error"></div>
+
+    <!-- Step by Step Animated Progress -->
+    <div class="loading-steps-box" id="loading-box">
+      <div style="font-weight:700; color:var(--text-main); margin-bottom:12px; font-size:0.95rem;">
+        Analyzing Resume with AI Engine...
+      </div>
+      <div class="step-indicator" id="step-1">
+        <span>🔄</span> <span>1. Extracting text & parsing document layout...</span>
+      </div>
+      <div class="step-indicator" id="step-2">
+        <span>⏳</span> <span>2. Evaluating ATS formatting & compliance benchmarks...</span>
+      </div>
+      <div class="step-indicator" id="step-3">
+        <span>⏳</span> <span>3. Cross-referencing technical skills & keyword gaps...</span>
+      </div>
+      <div class="step-indicator" id="step-4">
+        <span>⏳</span> <span>4. Generating STAR rewrites, interview questions & roadmap...</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  requireAuth();
+
+  let selectedFileObject = null;
+
+  // Setup drag and drop
+  const dropZone = document.getElementById("drop-zone");
+
+  ["dragenter", "dragover"].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add("dragover");
+    }, false);
+  });
+
+  ["dragleave", "drop"].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove("dragover");
+    }, false);
+  });
+
+  dropZone.addEventListener("drop", (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length) handleFileSelected(files[0]);
+  });
+
+  function handleFileSelected(file) {
+    if (!file) return;
+    selectedFileObject = file;
+    document.getElementById("file-name").textContent = file.name;
+    document.getElementById("file-size").textContent = (file.size / 1024).toFixed(1) + " KB";
+    document.getElementById("file-preview-wrap").style.display = "flex";
+    document.getElementById("drop-text").textContent = "Selected: " + file.name;
+    document.getElementById("analyze-error").textContent = "";
+  }
+
+  function clearSelectedFile() {
+    selectedFileObject = null;
+    document.getElementById("file-input").value = "";
+    document.getElementById("file-preview-wrap").style.display = "none";
+    document.getElementById("drop-text").innerHTML = 'Drag & drop your resume file here, or <span style="color:var(--primary); text-decoration:underline;">browse</span>';
+  }
+
+  // Pre-load sample resume for instant testing
+  function loadSampleResume() {
+    const sampleText = `
+Alex Morgan
+Senior Software Engineer | alex.morgan@email.com | (555) 019-2834 | linkedin.com/in/alexmorgan
+
+PROFESSIONAL SUMMARY
+Experienced Software Engineer with 4+ years specializing in Java, Spring Boot, MySQL, and REST API development. Proven track record of architecting scalable backend services and optimizing database queries.
+
+TECHNICAL SKILLS
+Languages: Java, SQL, Python, JavaScript, HTML, CSS
+Frameworks & Libraries: Spring Boot, Hibernate/JPA, RESTful Web Services, JUnit, Mockito
+Tools & Platforms: Git, Maven, Docker, MySQL, PostgreSQL, Linux, Postman
+Concepts: Microservices Architecture, Agile/Scrum, OOP, CI/CD Fundamentals
+
+PROFESSIONAL EXPERIENCE
+Senior Software Engineer | NexaTech Solutions (2022 - Present)
+- Designed and maintained core backend REST APIs utilizing Java and Spring Boot, serving 50,000+ daily requests.
+- Optimized slow SQL queries and database indexes in MySQL, cutting average response time from 380ms to 120ms.
+- Built automated integration test suites with JUnit and Mockito, boosting code test coverage from 62% to 88%.
+- Collaborated in an Agile Scrum team of 7 engineers to deliver sprint deliverables on schedule.
+
+Software Engineer | CloudScale Systems (2020 - 2022)
+- Built user management microservices with JWT token authentication and role-based access control.
+- Integrated third-party payment and notifications APIs with automated error retry handling.
+- Migrated legacy monolithic services into modular Spring Boot applications.
+
+EDUCATION
+Bachelor of Science in Computer Science | State University (2016 - 2020)
+    `.trim();
+
+    const blob = new Blob([sampleText], { type: "text/plain" });
+    const file = new File([blob], "Alex_Morgan_Software_Engineer_Resume.pdf", { type: "application/pdf" });
+    handleFileSelected(file);
+
+    fillSampleJD("java");
+  }
+
+  function fillSampleJD(type) {
+    if (type === "java") {
+      document.getElementById("job-description").value = `
+Job Title: Senior Java Backend Developer
+Company: Enterprise Cloud Corp
+Requirements:
+- 3+ years experience with Java, Spring Boot, and RESTful APIs
+- Strong relational database experience with MySQL or PostgreSQL
+- Experience with Docker, Kubernetes, and Cloud platforms (AWS)
+- Familiarity with CI/CD pipelines, Git, and automated testing (JUnit)
+- Excellent problem-solving skills and ability to lead system architecture discussions
+      `.trim();
+    } else {
+      document.getElementById("job-description").value = `
+Job Title: Full Stack Developer
+Requirements:
+- Proficient in JavaScript, React or Vue, HTML5, CSS3
+- Strong backend experience with Java / Spring Boot or Node.js
+- Database design with SQL and NoSQL (MongoDB)
+- Experience deploying applications to AWS with Docker
+- Strong communication and agile collaboration skills
+      `.trim();
+    }
+  }
+
+  async function handleAnalyze() {
+    const jobDescription = document.getElementById("job-description").value.trim();
+    const errorEl = document.getElementById("analyze-error");
+    const loadingBox = document.getElementById("loading-box");
+    const btn = document.getElementById("analyze-btn");
+
+    errorEl.textContent = "";
+
+    const fileToUpload = selectedFileObject || (document.getElementById("file-input").files.length ? document.getElementById("file-input").files[0] : null);
+
+    if (!fileToUpload) {
+      errorEl.textContent = "Please select or drop a resume file first, or click 'Load Sample Resume'.";
+      return;
+    }
+
+    btn.disabled = true;
+    loadingBox.style.display = "block";
+
+    // Progress animation timers
+    setTimeout(() => {
+      document.getElementById("step-1").innerHTML = "<span>✅</span> <span>1. Text parsed & structure indexed</span>";
+      document.getElementById("step-1").className = "step-indicator done";
+      document.getElementById("step-2").innerHTML = "<span>🔄</span> <span>2. Evaluating ATS formatting & compliance benchmarks...</span>";
+      document.getElementById("step-2").className = "step-indicator active";
+    }, 1200);
+
+    setTimeout(() => {
+      document.getElementById("step-2").innerHTML = "<span>✅</span> <span>2. ATS compliance evaluated</span>";
+      document.getElementById("step-2").className = "step-indicator done";
+      document.getElementById("step-3").innerHTML = "<span>🔄</span> <span>3. Cross-referencing technical skills & keyword gaps...</span>";
+      document.getElementById("step-3").className = "step-indicator active";
+    }, 2800);
+
+    setTimeout(() => {
+      document.getElementById("step-3").innerHTML = "<span>✅</span> <span>3. Skill gaps & keywords matched</span>";
+      document.getElementById("step-3").className = "step-indicator done";
+      document.getElementById("step-4").innerHTML = "<span>🔄</span> <span>4. Generating STAR rewrites, interview questions & roadmap...</span>";
+      document.getElementById("step-4").className = "step-indicator active";
+    }, 4500);
+
+    try {
+      const result = await analyzeResume(fileToUpload, jobDescription);
+      sessionStorage.setItem("latestAnalysis", JSON.stringify(result));
+      window.location.href = "dashboard.html";
+    } catch (e) {
+      errorEl.textContent = e.message;
+      loadingBox.style.display = "none";
+      btn.disabled = false;
+    }
+  }
+</script>
+<script src="js/chatbot.js"></script>
+</body>
+</html>

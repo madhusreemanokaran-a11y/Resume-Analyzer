@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell">
+  <div class="masthead">
+    <div class="brand">Resume Analyzer</div>
+    <nav>
+      <a href="upload.html">New analysis</a>
+      <a href="#" onclick="clearSession(); window.location.href='index.html';">Log out</a>
+    </nav>
+  </div>
+
+  <h2 id="greeting">Your career readiness</h2>
+
+  <div id="latest-analysis"></div>
+
+  <h3 style="margin-top:36px;">History</h3>
+  <div class="card" id="history-card">
+    <p class="muted">Loading…</p>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  requireAuth();
+  document.getElementById("greeting").textContent = "Welcome back, " + (localStorage.getItem("name") || "there");
+
+  function renderTags(container, items, isMissing) {
+    if (!items || !items.length) return;
+    const wrap = document.createElement("div");
+    wrap.className = "tag-list";
+    items.forEach(t => {
+      const el = document.createElement("span");
+      el.className = "tag" + (isMissing ? " missing" : "");
+      el.textContent = t;
+      wrap.appendChild(el);
+    });
+    container.appendChild(wrap);
+  }
+
+  function renderAnalysis(analysis) {
+    const container = document.getElementById("latest-analysis");
+    container.innerHTML = "";
+
+    let result = {};
+    try { result = JSON.parse(analysis.resultJson); } catch (e) {}
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const readiness = document.createElement("div");
+    readiness.className = "readiness";
+    readiness.innerHTML = `
+      <span class="score">${analysis.atsScore ?? "—"}</span>
+      <span class="label">ATS score${analysis.jobMatchPercent != null ? " · " + analysis.jobMatchPercent + "% job match" : ""}</span>
+    `;
+    card.appendChild(readiness);
+
+    if (result.categoryScores) {
+      const grid = document.createElement("div");
+      grid.className = "metric-grid";
+      Object.entries(result.categoryScores).forEach(([name, value]) => {
+        const m = document.createElement("div");
+        m.className = "metric";
+        m.innerHTML = `<div class="value">${value}%</div><div class="name">${name}</div>`;
+        grid.appendChild(m);
+      });
+      card.appendChild(grid);
+    }
+
+    if (result.strongSkills?.length) {
+      const h = document.createElement("h3");
+      h.style.marginTop = "24px";
+      h.textContent = "Strong skills";
+      card.appendChild(h);
+      renderTags(card, result.strongSkills, false);
+    }
+
+    if (result.missingSkills?.length || result.skillGap?.length) {
+      const h = document.createElement("h3");
+      h.style.marginTop = "24px";
+      h.textContent = "Skill gap";
+      card.appendChild(h);
+      renderTags(card, [...new Set([...(result.missingSkills||[]), ...(result.skillGap||[])])], true);
+    }
+
+    if (result.missingKeywords?.length) {
+      const h = document.createElement("h3");
+      h.style.marginTop = "24px";
+      h.textContent = "Missing keywords for this job";
+      card.appendChild(h);
+      renderTags(card, result.missingKeywords, true);
+    }
+
+    if (result.suggestions?.length) {
+      const h = document.createElement("h3");
+      h.style.marginTop = "24px";
+      h.textContent = "Suggestions";
+      card.appendChild(h);
+      const ul = document.createElement("ul");
+      ul.className = "suggestions";
+      result.suggestions.forEach(s => {
+        const li = document.createElement("li");
+        li.textContent = s;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }
+
+    if (result.recommendedRoles?.length) {
+      const h = document.createElement("h3");
+      h.style.marginTop = "24px";
+      h.textContent = "Roles that fit your profile";
+      card.appendChild(h);
+      const grid = document.createElement("div");
+      grid.className = "metric-grid";
+      result.recommendedRoles.forEach(r => {
+        const m = document.createElement("div");
+        m.className = "metric";
+        m.innerHTML = `<div class="value">${r.matchPercent}%</div><div class="name">${r.role}</div>`;
+        grid.appendChild(m);
+      });
+      card.appendChild(grid);
+    }
+
+    container.appendChild(card);
+  }
+
+  async function loadHistory() {
+    const historyCard = document.getElementById("history-card");
+    try {
+      const history = await fetchHistory();
+
+      // Show latest analysis, preferring one just created this session
+      const cached = sessionStorage.getItem("latestAnalysis");
+      if (cached) {
+        renderAnalysis(JSON.parse(cached));
+        sessionStorage.removeItem("latestAnalysis");
+      } else if (history.length) {
+        renderAnalysis(history[0]);
+      } else {
+        document.getElementById("latest-analysis").innerHTML =
+          `<div class="card"><p class="muted">No analyses yet. <a href="upload.html">Upload a resume</a> to get your first score.</p></div>`;
+      }
+
+      historyCard.innerHTML = "";
+      if (!history.length) {
+        historyCard.innerHTML = `<p class="muted">Nothing here yet.</p>`;
+        return;
+      }
+      history.forEach(a => {
+        const row = document.createElement("div");
+        row.className = "history-row";
+        const date = new Date(a.createdAt).toLocaleDateString();
+        row.innerHTML = `<span>${date}</span><span>ATS ${a.atsScore ?? "—"}${a.jobMatchPercent != null ? " · Match " + a.jobMatchPercent + "%" : ""}</span>`;
+        historyCard.appendChild(row);
+      });
+    } catch (e) {
+      historyCard.innerHTML = `<p class="error">${e.message}</p>`;
+    }
+  }
+
+  loadHistory();
+</script>
+</body>
+</html>

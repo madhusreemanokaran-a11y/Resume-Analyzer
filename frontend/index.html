@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Resume Analyzer - Beat the ATS & Land Your Dream Role</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="shell" style="max-width: 720px;">
+
+  <!-- Masthead Navigation -->
+  <div class="masthead">
+    <div class="brand">Resume Analyzer</div>
+    <nav class="nav-actions">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙 Dark</button>
+    </nav>
+  </div>
+
+  <div style="text-align:center; margin-bottom: 32px;">
+    <div style="display:inline-block; font-size:0.8rem; font-weight:700; color:var(--primary); background:var(--primary-light); padding:4px 14px; border-radius:var(--radius-pill); margin-bottom:12px; border:1px solid var(--primary-border);">
+      ✨ Powered by Advanced ATS Scoring & AI Intelligence
+    </div>
+    <h1 style="font-size:2.3rem;">Elevate Your Resume for Top ATS Scanners</h1>
+    <p class="muted" style="font-size:1.05rem; max-width:540px; margin:0 auto;">
+      Find out why recruiters pass on your resume. Get instant category grading, keyword gap analysis, STAR bullet rewrites, and custom mock interview prep.
+    </p>
+  </div>
+
+  <!-- Feature Highlights Grid -->
+  <div class="features-grid">
+    <div class="feature-box">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">ATS Health Score</div>
+      <div class="feature-desc">Interactive SVG radial benchmark against enterprise screening filters.</div>
+    </div>
+    <div class="feature-box">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Keyword Gap Matching</div>
+      <div class="feature-desc">Side-by-side comparison of verified skills vs missing posting keywords.</div>
+    </div>
+    <div class="feature-box">
+      <div class="feature-icon">✍️</div>
+      <div class="feature-title">STAR Bullet Enhancer</div>
+      <div class="feature-desc">Live rewrites with quantifiable metrics, power verbs, and impact phrasing.</div>
+    </div>
+    <div class="feature-box">
+      <div class="feature-icon">🎙️</div>
+      <div class="feature-title">AI Mock Interview</div>
+      <div class="feature-desc">Tailored technical & behavioral interview questions with model answers.</div>
+    </div>
+  </div>
+
+  <!-- Login Card -->
+  <div class="card" id="login-card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2 style="margin:0;">Welcome Back</h2>
+      <button class="btn-outline btn-sm" onclick="quickFillDemo('login')" style="margin-top:0;">⚡ Fill Demo User</button>
+    </div>
+    <p class="muted" style="margin-bottom:18px;">Log in to access your dashboard and past resume analyses.</p>
+
+    <label>Email Address</label>
+    <input type="email" id="login-email" placeholder="name@example.com">
+
+    <label>Password</label>
+    <input type="password" id="login-password" placeholder="••••••••">
+
+    <button onclick="handleLogin()" style="width:100%; margin-top:22px; padding:13px; font-size:1rem;">
+      Log In
+    </button>
+    <div class="error" id="login-error"></div>
+
+    <p class="muted" style="margin-top:20px; text-align:center;">
+      New to Resume Analyzer? <a href="#" onclick="toggleForms(); return false;" style="font-weight:700;">Create an account</a>
+    </p>
+  </div>
+
+  <!-- Register Card -->
+  <div class="card" id="register-card" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2 style="margin:0;">Create Account</h2>
+      <button class="btn-outline btn-sm" onclick="quickFillDemo('reg')" style="margin-top:0;">⚡ Fill Demo Info</button>
+    </div>
+    <p class="muted" style="margin-bottom:18px;">Get started in 30 seconds. No credit card required.</p>
+
+    <label>Full Name</label>
+    <input type="text" id="reg-name" placeholder="e.g. Alex Morgan">
+
+    <label>Email Address</label>
+    <input type="email" id="reg-email" placeholder="alex.morgan@example.com">
+
+    <label>Password (min 6 characters)</label>
+    <input type="password" id="reg-password" placeholder="••••••••">
+
+    <label>Target Job Role</label>
+    <input type="text" id="reg-role" placeholder="e.g. Senior Java Developer, Full Stack Engineer">
+
+    <button onclick="handleRegister()" style="width:100%; margin-top:22px; padding:13px; font-size:1rem;">
+      Create Free Account
+    </button>
+    <div class="error" id="register-error"></div>
+
+    <p class="muted" style="margin-top:20px; text-align:center;">
+      Already have an account? <a href="#" onclick="toggleForms(); return false;" style="font-weight:700;">Log in</a>
+    </p>
+  </div>
+
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  if (getToken()) window.location.href = "dashboard.html";
+
+  function toggleForms() {
+    const login = document.getElementById("login-card");
+    const reg = document.getElementById("register-card");
+    const showLogin = login.style.display === "none";
+    login.style.display = showLogin ? "block" : "none";
+    reg.style.display = showLogin ? "none" : "block";
+  }
+
+  function quickFillDemo(type) {
+    if (type === "login") {
+      document.getElementById("login-email").value = "demo@resumeanalyzer.com";
+      document.getElementById("login-password").value = "password123";
+    } else {
+      document.getElementById("reg-name").value = "Alex Morgan";
+      document.getElementById("reg-email").value = "demo_" + Math.floor(Math.random() * 9000 + 1000) + "@resumeanalyzer.com";
+      document.getElementById("reg-password").value = "password123";
+      document.getElementById("reg-role").value = "Senior Java Developer";
+    }
+  }
+
+  async function handleLogin() {
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+    const errorEl = document.getElementById("login-error");
+    errorEl.textContent = "";
+
+    if (!email || !password) {
+      errorEl.textContent = "Please enter both email and password.";
+      return;
+    }
+
+    try {
+      await loginUser(email, password);
+      window.location.href = "dashboard.html";
+    } catch (e) {
+      errorEl.textContent = e.message;
+    }
+  }
+
+  async function handleRegister() {
+    const name = document.getElementById("reg-name").value.trim();
+    const email = document.getElementById("reg-email").value.trim();
+    const password = document.getElementById("reg-password").value;
+    const role = document.getElementById("reg-role").value.trim();
+    const errorEl = document.getElementById("register-error");
+    errorEl.textContent = "";
+
+    if (!name || !email || !password) {
+      errorEl.textContent = "Please fill in your name, email, and password.";
+      return;
+    }
+
+    try {
+      await registerUser(name, email, password, role);
+      window.location.href = "dashboard.html";
+    } catch (e) {
+      errorEl.textContent = e.message;
+    }
+  }
+</script>
+<script src="js/chatbot.js"></script>
+</body>
+</html>
