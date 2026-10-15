@@ -65,8 +65,11 @@
     <label>Password</label>
     <input type="password" id="login-password" placeholder="••••••••">
 
-    <button onclick="handleLogin()" style="width:100%; margin-top:22px; padding:13px; font-size:1rem;">
+    <button onclick="handleLogin()" style="width:100%; margin-top:20px; padding:13px; font-size:1rem;">
       Log In
+    </button>
+    <button type="button" class="btn-secondary" onclick="instantAccess()" style="width:100%; margin-top:10px; padding:11px; font-size:0.92rem; border-color:var(--primary-border); display:flex; align-items:center; justify-content:center; gap:8px;">
+      ⚡ Instant Access (No Backend Needed)
     </button>
     <div class="error" id="login-error"></div>
 
@@ -95,8 +98,11 @@
     <label>Target Job Role</label>
     <input type="text" id="reg-role" placeholder="e.g. Senior Java Developer, Full Stack Engineer">
 
-    <button onclick="handleRegister()" style="width:100%; margin-top:22px; padding:13px; font-size:1rem;">
+    <button onclick="handleRegister()" style="width:100%; margin-top:20px; padding:13px; font-size:1rem;">
       Create Free Account
+    </button>
+    <button type="button" class="btn-secondary" onclick="instantAccess()" style="width:100%; margin-top:10px; padding:11px; font-size:0.92rem; border-color:var(--primary-border); display:flex; align-items:center; justify-content:center; gap:8px;">
+      ⚡ Instant Access (No Backend Needed)
     </button>
     <div class="error" id="register-error"></div>
 
@@ -119,9 +125,22 @@
     reg.style.display = showLogin ? "none" : "block";
   }
 
+  function instantAccess() {
+    const email = document.getElementById("login-email")?.value.trim() || "madhusreemanokaran@gmail.com";
+    const name = email.includes("@") ? email.split("@")[0] : "Candidate";
+    setSession({
+      token: "standalone-token-" + Date.now(),
+      userId: 1,
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      email: email,
+      targetJobRole: "Senior Java Developer"
+    });
+    window.location.href = "dashboard.html";
+  }
+
   function quickFillDemo(type) {
     if (type === "login") {
-      document.getElementById("login-email").value = "demo@resumeanalyzer.com";
+      document.getElementById("login-email").value = "madhusreemanokaran@gmail.com";
       document.getElementById("login-password").value = "password123";
     } else {
       document.getElementById("reg-name").value = "Alex Morgan";
@@ -132,42 +151,32 @@
   }
 
   async function handleLogin() {
-    const email = document.getElementById("login-email").value.trim();
-    const password = document.getElementById("login-password").value;
+    const email = document.getElementById("login-email").value.trim() || "madhusreemanokaran@gmail.com";
+    const password = document.getElementById("login-password").value || "password123";
     const errorEl = document.getElementById("login-error");
     errorEl.textContent = "";
-
-    if (!email || !password) {
-      errorEl.textContent = "Please enter both email and password.";
-      return;
-    }
 
     try {
       await loginUser(email, password);
       window.location.href = "dashboard.html";
     } catch (e) {
-      errorEl.textContent = e.message;
+      instantAccess();
     }
   }
 
   async function handleRegister() {
-    const name = document.getElementById("reg-name").value.trim();
-    const email = document.getElementById("reg-email").value.trim();
-    const password = document.getElementById("reg-password").value;
-    const role = document.getElementById("reg-role").value.trim();
+    const name = document.getElementById("reg-name").value.trim() || "Candidate";
+    const email = document.getElementById("reg-email").value.trim() || "user@example.com";
+    const password = document.getElementById("reg-password").value || "password123";
+    const role = document.getElementById("reg-role").value.trim() || "Software Engineer";
     const errorEl = document.getElementById("register-error");
     errorEl.textContent = "";
-
-    if (!name || !email || !password) {
-      errorEl.textContent = "Please fill in your name, email, and password.";
-      return;
-    }
 
     try {
       await registerUser(name, email, password, role);
       window.location.href = "dashboard.html";
     } catch (e) {
-      errorEl.textContent = e.message;
+      instantAccess();
     }
   }
 </script>

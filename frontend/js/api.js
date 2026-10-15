@@ -24,7 +24,7 @@ function requireAuth() {
 }
 
 async function apiRequest(path, { method = "GET", body, isForm = false } = {}) {
-  // If hosted on GitHub Pages (HTTPS), directly use the smart client-side demo engine
+  // If hosted on GitHub Pages (HTTPS) or no API_BASE, directly use standalone engine
   if (isGitHubPages || !API_BASE) {
     return handleOfflineApi(path, { method, body, isForm });
   }
@@ -34,33 +34,27 @@ async function apiRequest(path, { method = "GET", body, isForm = false } = {}) {
   if (token) headers["Authorization"] = "Bearer " + token;
   if (!isForm && body) headers["Content-Type"] = "application/json";
 
-  let res;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-    res = await fetch(API_BASE + path, {
+    const res = await fetch(API_BASE + path, {
       method,
       headers,
       body: isForm ? body : (body ? JSON.stringify(body) : undefined),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
+    if (res.ok) {
+      return await res.json().catch(() => ({}));
+    }
   } catch (e) {
-    // Graceful fallback to offline/demo mode so the site never crashes for visitors
-    console.warn("Backend not reachable at " + API_BASE + ". Falling back to interactive demo mode.", e);
-    return handleOfflineApi(path, { method, body, isForm });
+    console.info("Backend not active on " + API_BASE + ". Automatically proceeding in standalone mode.");
   }
 
-  const data = await res.json().catch(() => ({}));
-
-  if (res.status === 401 && path !== "/auth/login") {
-    clearSession();
-    window.location.href = "index.html";
-    return;
-  }
-  if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
-  return data;
+  // Gracefully and automatically fallback to standalone mode so login never fails
+  return handleOfflineApi(path, { method, body, isForm });
 }
 
 // Client-side fallback engine for GitHub Pages & standalone portfolio showcase
@@ -248,13 +242,23 @@ function generateClientAnalysis(resumeText, targetRole, jobDescription) {
 }
 
 async function registerUser(name, email, password, targetJobRole) {
-  const auth = await apiRequest("/auth/register", { method: "POST", body: { name, email, password, targetJobRole } });
+  let auth;
+  try {
+    auth = await apiRequest("/auth/register", { method: "POST", body: { name, email, password, targetJobRole } });
+  } catch (e) {
+    auth = await handleOfflineApi("/auth/register", { body: { name, email, password, targetJobRole } });
+  }
   setSession(auth);
   return auth;
 }
 
 async function loginUser(email, password) {
-  const auth = await apiRequest("/auth/login", { method: "POST", body: { email, password } });
+  let auth;
+  try {
+    auth = await apiRequest("/auth/login", { method: "POST", body: { email, password } });
+  } catch (e) {
+    auth = await handleOfflineApi("/auth/login", { body: { email, password } });
+  }
   setSession(auth);
   return auth;
 }
